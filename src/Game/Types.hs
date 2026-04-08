@@ -21,15 +21,17 @@ data State (s :: Location) where
   StateStart :: State Start
   StateS1 :: State S1
 
-data StartAction = StartAction
-
 data Frame = Frame Character String
 
 newtype Sequence = Sequence [Frame]
 
-type family Action (s :: Location) :: Type where
-  Action Start = StartAction
-  Action S1 = S1Action
+data Action (pre :: Location) (post :: Location) where
+  StartAction :: Action Start S1
+  GoAway :: Action S1 S1
+  SayHi :: Action S1 S1
+
+-- data SomeAction pre where
+--   SomeAction :: Action pre post -> SomeAction pre
 
 -- Bar
 -- Action:
@@ -37,7 +39,6 @@ type family Action (s :: Location) :: Type where
 --    Get Food
 --    Exit
 
-data S1Action = GoAway | SayHi
 
 data SomeState = forall s. SomeState
   { nextState :: State s
