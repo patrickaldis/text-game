@@ -2,9 +2,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# OPTIONS_GHC -Wno-unused-do-bind #-}
-
 module Main (main) where
 
 import Control.Monad.Fix (MonadFix)
@@ -39,7 +36,7 @@ app ::
   ) =>
   m (Event t ())
 app = do
-  advance <- keyCombo (V.KEnter, []) >>= f (ChatState StateStart StartAction 0) . void
+  advance <- keyCombo (V.KEnter, []) >>= f (ChatState StateStart StartAction 0 Nothing) . void
 
   col do
     tile flex $
@@ -51,9 +48,8 @@ app = do
     ctrlc
 
 f :: (Reflex t, MonadHold t m, MonadFix m) => ChatState s s' -> Event t () -> m (Dynamic t (ChatState s s'))
-f s0 e = foldDyn func s0 e
- where
-  func _ s = case nextFrame s of
+f = foldDyn \_ s ->
+  case nextFrame s of
     Left s' -> s'
     Right _ -> error "unimplemented"
 
@@ -73,24 +69,25 @@ transition = \case
     GoAway -> (StateS1, Sequence [])
 
 data ChatState s s' = ChatState
-  { s0 :: State s
-  , a :: Action s s'
-  , i :: Int
+  { initialState :: State s
+  , action :: Action s s'
+  , frameNo :: Int
+  , atChoice :: Maybe [State s']
   }
 
 getFrame :: ChatState s s' -> Frame
-getFrame (ChatState s a i) =
-  case snd . transition s $ a of
-    Sequence fs -> fs !! i
+getFrame state =
+  case snd . transition (initialState state) $ action state of
+    Sequence fs -> fs !! frameNo state
 
 nextFrame :: ChatState s s' -> Either (ChatState s s') (State s')
 nextFrame state =
-  if i state /= length y
-    then Left state{i = i'}
+  if frameNo state + 1 < length y
+    then Left state{frameNo = i'}
     else Right x
  where
-  (x, Sequence y) = transition (s0 state) (a state)
-  i' = i state + 1
+  (x, Sequence y) = transition (initialState state) (action state)
+  i' = frameNo state + 1
 
 drawFrame ::
   ( Reflex t
@@ -102,13 +99,13 @@ drawFrame ::
   , HasFocusReader t m
   , HasInput t m
   ) =>
-  Frame ->
+  Dynamic t Frame ->
   m ()
-drawFrame (Frame c t) =
+drawFrame df = do
   boxTitle
     (constant thickBoxStyle)
-    (constant . T.pack $ name c)
-    (text . constant . T.pack $ t)
+    (current . fmap (T.pack . name . character) $ df)
+    (text . current . fmap (T.pack . dialogue) $ df)
 
 drawCurrentFrame ::
   ( Reflex t
@@ -122,4 +119,4 @@ drawCurrentFrame ::
   ) =>
   Dynamic t (ChatState s s') ->
   m ()
-drawCurrentFrame state = void $ forDynM state (drawFrame . getFrame)
+drawCurrentFrame state = drawFrame (getFrame <$> state)
