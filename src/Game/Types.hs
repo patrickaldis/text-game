@@ -34,13 +34,16 @@ data Action (pre :: Location) (post :: Location) where
 deriving instance Show (Action pre post)
 
 class HasActions (s :: Location) where
-  allActions :: [forall x. (forall s'. Action s s' -> x) -> x]
+  allActions :: [Exists (Action s)]
 instance HasActions Start where
-  allActions = [\f -> f StartAction]
+  allActions = [Exists StartAction]
 instance HasActions S1 where
-  allActions = [\f -> f GoAway, \f -> f SayHi]
+  allActions = [Exists GoAway, Exists SayHi]
 
 data SomeState = forall s. SomeState
   { nextState :: State s
   , sequence :: Sequence
   }
+
+data Exists t where
+  Exists :: t a -> Exists t
