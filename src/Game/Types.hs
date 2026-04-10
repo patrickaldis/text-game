@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ImpredicativeTypes #-}
 
 module Game.Types where
 
@@ -30,10 +31,14 @@ data Action (pre :: Location) (post :: Location) where
   StartAction :: Action Start S1
   GoAway :: Action S1 S1
   SayHi :: Action S1 S1
+deriving instance Show (Action pre post)
 
-f :: s -> [Action s s']
-f (Start)= [StartAction]
-f (S1) = [GoAway, SayHi]
+class HasActions (s :: Location) where
+  allActions :: [forall x. (forall s'. Action s s' -> x) -> x]
+instance HasActions Start where
+  allActions = [\f -> f StartAction]
+instance HasActions S1 where
+  allActions = [\f -> f GoAway, \f -> f SayHi]
 
 data SomeState = forall s. SomeState
   { nextState :: State s

@@ -47,11 +47,14 @@ app = do
 
     ctrlc
 
-f :: (Reflex t, MonadHold t m, MonadFix m) => ChatState s s' -> Event t () -> m (Dynamic t (ChatState s s'))
+f ::
+    forall s s' t m.
+    (Reflex t, MonadHold t m, MonadFix m, HasActions s') =>
+    ChatState s s' -> Event t () -> m (Dynamic t (ChatState s s'))
 f = foldDyn \_ s ->
-  case nextFrame s of
-    Left s' -> s'
-    Right _ -> error "unimplemented"
+    case nextFrame s of
+        Left s' -> s'
+        Right _ -> error $ show $ map (\g -> g show) $ allActions @s'
 
 transition :: State s -> Action s s' -> (State s', Sequence)
 transition = \case
