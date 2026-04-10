@@ -39,7 +39,7 @@ app ::
   ) =>
   m (Event t ())
 app = do
-  advance <- keyCombo (V.KEnter, []) >>= f . void
+  advance <- keyCombo (V.KEnter, []) >>= f (ChatState StateStart StartAction 0) . void
 
   col do
     tile flex $
@@ -50,10 +50,9 @@ app = do
 
     ctrlc
 
-f :: (Reflex t, MonadHold t m, MonadFix m) => Event t () -> m (Dynamic t (ChatState s s'))
-f e = foldDyn func s0 e
+f :: (Reflex t, MonadHold t m, MonadFix m) => ChatState s s' -> Event t () -> m (Dynamic t (ChatState s s'))
+f s0 e = foldDyn func s0 e
  where
-  s0 = ChatState StateStart StartAction 0
   func _ s = case nextFrame s of
     Left s' -> s'
     Right _ -> error "unimplemented"
