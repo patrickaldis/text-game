@@ -54,7 +54,7 @@ f ::
 f = foldDyn \_ s ->
     case nextFrame s of
         Left s' -> s'
-        Right _ -> error $ show $ map (\(Exists x) -> show x) $ allActions @s'
+        Right _ -> error $ show $ map (withExists show) $ allActions @s'
 
 transition :: State s -> Action s s' -> (State s', Sequence)
 transition = \case

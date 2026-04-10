@@ -47,3 +47,6 @@ data SomeState = forall s. SomeState
 
 data Exists t where
   Exists :: t a -> Exists t
+
+withExists :: (forall a. t a -> x) -> Exists t -> x
+withExists f (Exists x) = f x
