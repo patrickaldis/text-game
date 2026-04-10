@@ -31,6 +31,10 @@ data Action (pre :: Location) (post :: Location) where
   GoAway :: Action S1 S1
   SayHi :: Action S1 S1
 
+f :: s -> [Action s s']
+f (Start)= [StartAction]
+f (S1) = [GoAway, SayHi]
+
 data SomeState = forall s. SomeState
   { nextState :: State s
   , sequence :: Sequence
