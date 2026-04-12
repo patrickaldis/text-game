@@ -2,10 +2,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+
 module Main (main) where
 
 import Control.Monad.Fix (MonadFix)
-import Data.Functor (void)
+import Data.Functor (void, (<&>))
 import Data.Text qualified as T
 import Game.Types hiding (nextState)
 import Graphics.Vty.Input qualified as V
@@ -36,25 +38,40 @@ app ::
   ) =>
   m (Event t ())
 app = do
-  advance <- keyCombo (V.KEnter, []) >>= f (ChatState StateStart StartAction 0 Nothing) . void
+  advance <- keyCombo (V.KEnter, []) >>= f (initialStateFor StateStart StartAction) . void
 
-  col do
-    tile flex $
-      text "picture here"
+  _ <-
+    runWithReplace
+      (col tile flex $ text "Init")
+      ( updated advance
+          <&> ( \(GlobalState s phase) -> col do
+                  tile flex $
+                    text "picture here"
+                  case phase of
+                    Dialoguing a (Sequence fs) i -> 
+                      tile (fixed 6) $
+                        drawFrame (fs !! i) 
+              )
+      )
 
-    tile (fixed 6) $
-      drawCurrentFrame advance
-
-    ctrlc
+  ctrlc
 
 f ::
-    forall s s' t m.
-    (Reflex t, MonadHold t m, MonadFix m, HasActions s') =>
-    ChatState s s' -> Event t () -> m (Dynamic t (ChatState s s'))
-f = foldDyn \_ s ->
-    case nextFrame s of
-        Left s' -> s'
-        Right _ -> error $ show $ map (withExists show) $ allActions @s'
+  (Reflex t, MonadHold t m, MonadFix m) =>
+  GlobalState -> Event t () -> m (Dynamic t GlobalState)
+f = foldDyn \_ gs -> case gs of
+  GlobalState s phase -> case phase of
+    Dialoguing a sequence@(Sequence fs) i ->
+      if i + 1 < length fs
+        then GlobalState s (Dialoguing a sequence (i + 1))
+        else GlobalState s (Choosing allActions)
+    Choosing ((Exists a) : as) ->
+      initialStateFor s a
+
+initialStateFor :: State s' -> Action s' s -> GlobalState
+initialStateFor s a =
+  let (s', Sequence fs) = transition s a
+   in GlobalState s' (Dialoguing a (Sequence fs) 0)
 
 transition :: State s -> Action s s' -> (State s', Sequence)
 transition = \case
@@ -71,26 +88,11 @@ transition = \case
     SayHi -> (StateS1, Sequence [])
     GoAway -> (StateS1, Sequence [])
 
-data ChatState s s' = ChatState
-  { initialState :: State s
-  , action :: Action s s'
-  , frameNo :: Int
-  , atChoice :: Maybe [State s']
-  }
+data GlobalState = forall s. GlobalState (State s) (Phase s)
 
-getFrame :: ChatState s s' -> Frame
-getFrame state =
-  case snd . transition (initialState state) $ action state of
-    Sequence fs -> fs !! frameNo state
-
-nextFrame :: ChatState s s' -> Either (ChatState s s') (State s')
-nextFrame state =
-  if frameNo state + 1 < length y
-    then Left state{frameNo = i'}
-    else Right x
- where
-  (x, Sequence y) = transition (initialState state) (action state)
-  i' = frameNo state + 1
+data Phase (s :: Location) where
+  Dialoguing :: Action s' s -> Sequence -> Int -> Phase s
+  Choosing :: [Exists (Action s)] -> Phase s
 
 drawFrame ::
   ( Reflex t
@@ -102,24 +104,10 @@ drawFrame ::
   , HasFocusReader t m
   , HasInput t m
   ) =>
-  Dynamic t Frame ->
+  Frame ->
   m ()
-drawFrame df = do
+drawFrame f = do
   boxTitle
     (constant thickBoxStyle)
-    (current . fmap (T.pack . name . character) $ df)
-    (text . current . fmap (T.pack . dialogue) $ df)
-
-drawCurrentFrame ::
-  ( Reflex t
-  , MonadHold t m
-  , MonadFix m
-  , HasTheme t m
-  , HasDisplayRegion t m
-  , HasImageWriter t m
-  , HasFocusReader t m
-  , HasInput t m
-  ) =>
-  Dynamic t (ChatState s s') ->
-  m ()
-drawCurrentFrame state = drawFrame (getFrame <$> state)
+    (constant . T.pack . name . character $ f)
+    (text . constant . T.pack . dialogue $ f)
