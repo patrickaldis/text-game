@@ -42,7 +42,7 @@ app = do
 
   _ <-
     runWithReplace
-      (col tile flex $ text "Init")
+      (col $ tile flex $ text "Init")
       ( updated advance
           <&> ( \(GlobalState s phase) -> col do
                   tile flex $
