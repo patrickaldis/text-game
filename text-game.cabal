@@ -25,7 +25,9 @@ executable text-game
                       vty,
                       reflex,
                       reflex-vty,
-                      text
+                      text,
+                      transformers,
+                      mtl
     hs-source-dirs:   src
     default-language: GHC2024
     ghc-options: -threaded

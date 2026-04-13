@@ -2,12 +2,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module Main (main) where
 
 import Control.Monad.Fix (MonadFix)
-import Data.Functor (void, (<&>))
+import Data.Char (digitToInt, isDigit)
+import Data.Foldable (forM_)
+import Data.Functor ((<&>))
+import Data.List ((!?))
 import Data.Text qualified as T
 import Game.Types hiding (nextState)
 import Graphics.Vty.Input qualified as V
@@ -38,40 +40,81 @@ app ::
   ) =>
   m (Event t ())
 app = do
-  advance <- keyCombo (V.KEnter, []) >>= f (initialStateFor StateStart StartAction) . void
+  advance <- input >>= updateState (initialStateFor StateStart StartAction)
 
   _ <-
     runWithReplace
       (col $ tile flex $ text "Init")
       ( updated advance
-          <&> ( \(GlobalState s phase) -> col do
-                  tile flex $
-                    text "picture here"
+          <&> ( \(GlobalState _ phase) ->
                   case phase of
-                    Dialoguing a (Sequence fs) i -> 
-                      tile (fixed 6) $
-                        drawFrame (fs !! i) 
+                    Dialoguing (Sequence fs) i ->
+                      col do
+                        tile flex $
+                          text "picture here"
+                        tile (fixed 6) $
+                          drawFrame (fs !! i)
+                    Choosing f as ->
+                      col do
+                        tile flex $
+                          row do
+                            tile flex $ text "picture here"
+                            tile flex $
+                              col do
+                                tile flex $ pure ()
+                                tile (fixed (fromIntegral (length as + 2))) $
+                                  boxTitle
+                                    (constant doubleBoxStyle)
+                                    "Actions"
+                                    ( col
+                                        ( forM_
+                                            (zip [1::Integer ..] (withExists show <$> as))
+                                            ( \(n, a) ->
+                                                tile (fixed 1)
+                                                  . text
+                                                  . constant
+                                                  . T.pack
+                                                  $ show n ++ ". " ++ a
+                                            )
+                                        )
+                                    )
+                        tile (fixed 6) $
+                          drawFrame f
               )
       )
 
   ctrlc
 
-f ::
+updateState ::
   (Reflex t, MonadHold t m, MonadFix m) =>
-  GlobalState -> Event t () -> m (Dynamic t GlobalState)
-f = foldDyn \_ gs -> case gs of
+  GlobalState -> Event t V.Event -> m (Dynamic t GlobalState)
+updateState = foldDyn \e gs -> case gs of
   GlobalState s phase -> case phase of
-    Dialoguing a sequence@(Sequence fs) i ->
+    Dialoguing sequence@(Sequence fs) i ->
       if i + 1 < length fs
-        then GlobalState s (Dialoguing a sequence (i + 1))
-        else GlobalState s (Choosing allActions)
-    Choosing ((Exists a) : as) ->
-      initialStateFor s a
+        then GlobalState s (Dialoguing sequence (i + 1))
+        else GlobalState s (Choosing (last fs) allActions)
+    Choosing _ [] -> error "You Can't Advance"
+    (Choosing _ as) ->
+      let
+        ma = do
+          i <- getInt e
+          as !? (i - 1)
+       in
+        case ma of
+          Just (Exists a) -> initialStateFor s a
+          Nothing -> GlobalState s phase
 
-initialStateFor :: HasActions s => State s' -> Action s' s -> GlobalState
+getInt :: V.Event -> Maybe Int
+getInt (V.EvKey (V.KChar c) [])
+  | isDigit c = Just . digitToInt $ c
+  | otherwise = Nothing
+getInt _ = Nothing
+
+initialStateFor :: (HasActions s) => State s' -> Action s' s -> GlobalState
 initialStateFor s a =
   let (s', Sequence fs) = transition s a
-   in GlobalState s' (Dialoguing a (Sequence fs) 0)
+   in GlobalState s' (Dialoguing (Sequence fs) 0)
 
 transition :: State s -> Action s s' -> (State s', Sequence)
 transition = \case
@@ -80,19 +123,19 @@ transition = \case
       ( StateS1
       , Sequence
           [ Frame P1 "Hi here's text 1"
-          , Frame P2 "Now I'm saying something"
-          , Frame P1 "I stink"
+          , Frame P2 "Here's text 2"
+          , Frame P1 "Here's text 3"
           ]
       )
   StateS1 -> \case
-    SayHi -> (StateS1, Sequence [])
-    GoAway -> (StateS1, Sequence [])
+    SayHi -> (StateS1, Sequence [Frame P1 "Im In SayHi"])
+    GoAway -> (StateS1, Sequence [Frame P1 "Im In GoAway"])
 
 data GlobalState = forall s. GlobalState (State s) (Phase s)
 
 data Phase (s :: Location) where
-  Dialoguing :: HasActions s => Action s' s -> Sequence -> Int -> Phase s
-  Choosing :: [Exists HasActions (Action s)] -> Phase s
+  Dialoguing :: (HasActions s) => Sequence -> Int -> Phase s
+  Choosing :: Frame -> [Exists HasActions (Action s)] -> Phase s
 
 drawFrame ::
   ( Reflex t
