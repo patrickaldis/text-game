@@ -4,6 +4,8 @@
 
 module Game.Types where
 
+import Data.Kind
+
 type data Location = Start | S1
 
 data Character = P1 | P2 | Narrator
@@ -34,7 +36,7 @@ data Action (pre :: Location) (post :: Location) where
 deriving instance Show (Action pre post)
 
 class HasActions (s :: Location) where
-  allActions :: [Exists (Action s)]
+  allActions :: [Exists HasActions (Action s)]
 instance HasActions Start where
   allActions = [Exists StartAction]
 instance HasActions S1 where
@@ -45,8 +47,8 @@ data SomeState = forall s. SomeState
   , sequence :: Sequence
   }
 
-data Exists t where
-  Exists :: t a -> Exists t
+data Exists (c :: k -> Constraint) (t :: k -> Type) where
+  Exists :: c a => t a -> Exists c t
 
-withExists :: (forall a. t a -> x) -> Exists t -> x
+withExists :: (forall a. c a => t a -> x) -> Exists c t -> x
 withExists f (Exists x) = f x

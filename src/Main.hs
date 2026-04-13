@@ -68,7 +68,7 @@ f = foldDyn \_ gs -> case gs of
     Choosing ((Exists a) : as) ->
       initialStateFor s a
 
-initialStateFor :: State s' -> Action s' s -> GlobalState
+initialStateFor :: HasActions s => State s' -> Action s' s -> GlobalState
 initialStateFor s a =
   let (s', Sequence fs) = transition s a
    in GlobalState s' (Dialoguing a (Sequence fs) 0)
@@ -91,8 +91,8 @@ transition = \case
 data GlobalState = forall s. GlobalState (State s) (Phase s)
 
 data Phase (s :: Location) where
-  Dialoguing :: Action s' s -> Sequence -> Int -> Phase s
-  Choosing :: [Exists (Action s)] -> Phase s
+  Dialoguing :: HasActions s => Action s' s -> Sequence -> Int -> Phase s
+  Choosing :: [Exists HasActions (Action s)] -> Phase s
 
 drawFrame ::
   ( Reflex t
