@@ -42,33 +42,45 @@ app ::
 app = do
   advance <- input >>= updateState (initialStateFor StateStart StartAction)
 
+  reg <- askRegion
+
+  pane reg (pure True) $
+    fill . constant $
+      '.'
+
   _ <-
     runWithReplace
-      (col $ tile flex $ text "Init")
+      ( let
+          (_, Sequence (f : _)) = transition StateStart StartAction
+         in
+          col do
+            tile flex blank
+            tile (fixed 6) $
+              drawFrame f
+      )
       ( updated advance
           <&> ( \(GlobalState _ phase) ->
                   case phase of
                     Dialoguing (Sequence fs) i ->
                       col do
-                        tile flex $
-                          text "picture here"
+                        tile flex blank
                         tile (fixed 6) $
                           drawFrame (fs !! i)
                     Choosing f as ->
                       col do
                         tile flex $
                           row do
-                            tile flex $ text "picture here"
+                            tile flex blank
                             tile flex $
                               col do
-                                tile flex $ pure ()
+                                tile flex blank
                                 tile (fixed (fromIntegral (length as + 2))) $
                                   boxTitle
                                     (constant doubleBoxStyle)
                                     "Actions"
                                     ( col
                                         ( forM_
-                                            (zip [1::Integer ..] (withExists show <$> as))
+                                            (zip [1 :: Integer ..] (withExists show <$> as))
                                             ( \(n, a) ->
                                                 tile (fixed 1)
                                                   . text
